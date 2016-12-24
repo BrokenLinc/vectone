@@ -1,58 +1,19 @@
 import Tone from 'tone';
-// import { fabric } from 'fabric-browseronly';
-
 import nodeType from './nodeType';
-import { getNodesInRange } from './helpers';
 import ether from './ether';
-import canvas from './canvas';
+import stage from './stage';
 import { SynthNode, PluckSynthNode, Metronome, BitCrusherNode } from './components';
 
 import '../css/app.less';
 
-canvas.on('object:moving', event => {
-	const node = event.target;
-	if(node.nodeType === nodeType.INSTRUMENT) {
-		ether.trigger('INSTRUMENT_MOVE', { node });
-	}
-	if(node.nodeType === nodeType.EFFECT) {
-		ether.trigger('EFFECT_MOVE', { node });
-	}
-});
-
 Tone.Transport.start();
 
+const synthNode = new SynthNode({ x: 100, y: 100 });
+const synthNode2 = new PluckSynthNode({ x: 200, y: 100 });
 
-const synthNode = new SynthNode({ left: 100, top: 100 });
-const synthNode2 = new PluckSynthNode({ left: 200, top: 100 });
+const metronome1 = new Metronome({ frequency: '8n', x: 100, y: 350 });
 
-const metronome1 = new Metronome({ frequency: '8n', left: 100, top: 350 });
-
-const effect1 = new BitCrusherNode({ left: 350, top: 350 })
-
-//const metronome2 = new Metronome({ frequency: '8n', left: 350, top: 350 });
-
-
-
-// ### scratch pad ###
-
-//metronome --> synth
-
-// (loops, parts) --> synth
-
-// metronome1.addReceiver(synthNode);
-// metronome1.removeReceiver(synthNode);
-
-
-
-
-
-// var synth = new Tone.Synth().toMaster();
-
-
-// var crusher = new Tone.BitCrusher(4).toMaster();
-// //var synth = new Tone.MonoSynth();
-// synth.connect(crusher);
-// //synth.discconnect(crusher);
+const effect1 = new BitCrusherNode({ x: 350, y: 350 })
 
 // //use an array of objects as long as the object has a "time" attribute
 // var part = new Tone.Part(function(time, value){

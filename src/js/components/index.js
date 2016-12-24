@@ -1,11 +1,11 @@
-import { assign, each, indexOf, remove } from 'lodash';
-import { fabric } from 'fabric-browseronly';
+import { assign, indexOf } from 'lodash';
+import createjs from 'createjs-combined';
 import Tone from 'tone';
 
 import nodeType from '../nodeType';
-import { animateProps, distanceBetweenNodesShorterThan } from '../helpers';
+import { animateProps, distanceBetweenNodesShorterThan, moveToFront } from '../helpers';
 import ether from '../ether';
-import canvas from '../canvas';
+import stage from '../stage';
 
 const GRIP_SIZE = 50;
 const EVENT_RANGE = 100;
@@ -18,50 +18,69 @@ const RANGE_RING_PROPS = {
 	opacity: 0.4,
 };
 
-fabric.Object.prototype.set({
-	originX: 'center',
-	originY: 'center',
-});
+class RangeRing extends createjs.Shape {
+	constructor(props) {
+		super(props);
 
-class RangeRing extends fabric.Circle {
-	initialize(props) {
-		super.initialize(assign(props, RANGE_RING_PROPS));
+		this.graphics
+			.setStrokeDash([7, 7])
+			.setStrokeStyle(1)
+			.beginStroke('#888')
+			.drawCircle(0, 0, EVENT_RANGE);
 	}
 }
 
-class Node extends fabric.Group {
-	initialize(props) {
-		super.initialize([], assign({
-			width: GRIP_SIZE,
-			height: GRIP_SIZE,
-			hasControls: false,
-			borderColor: 'transparent',
-			// selectable: false,
-			// lockScalingX: true,
-			// lockScalingY: true,
-		} ,props));
+class PulseRing extends createjs.Shape {
+	constructor(props) {
+		super(props);
 
-		// this.setControlsVisibility({
-		// 	mt: false,
-		// 	mb: false,
-		// 	ml: false,
-		// 	mr: false,
-		// 	tr: false,
-		// 	tl: false,
-		// 	br: false,
-		// 	bl: false
-		// });
-		// this.hasRotatingPoint = true;
+		this.graphics
+			.setStrokeStyle(1)
+			.beginStroke('black')
+			.drawCircle(0, 0, GRIP_SIZE / 2);
+	}
+}
+
+class SolidCircle extends createjs.Shape {
+	constructor({ fill, radius }) {
+		super();
+
+		this.graphics
+			.beginFill(fill || 'white')
+			.drawCircle(0, 0, radius || 9);
+	}
+}
+
+class Node extends createjs.Container {
+	constructor(props) {
+		super(props);
+
+		this.set(props);
 
 		this.receiverNodes = [];
-		
-		this.grip = new fabric.Circle({
-			fill: 'black',
-			radius: GRIP_SIZE / 2,
-		});
-		this.add(this.grip);
 
-		canvas.add(this);
+		const grip = new createjs.Shape();
+		grip.graphics
+			.beginFill('black')
+			.drawCircle(0, 0, GRIP_SIZE / 2);
+		this.addChild(grip);
+
+		grip.on('pressmove', e => {
+			const node = this;
+
+			moveToFront(node);
+			node.x = e.stageX;
+			node.y = e.stageY;
+
+			if(node.nodeType === nodeType.INSTRUMENT) {
+				ether.trigger('INSTRUMENT_MOVE', { node });
+			}
+			if(node.nodeType === nodeType.EFFECT) {
+				ether.trigger('EFFECT_MOVE', { node });
+			}
+		});
+
+		stage.addChild(this);
 	}
 	setReceivers(nodes) {
 		this.receiverNodes = nodes;
@@ -72,24 +91,19 @@ class Node extends fabric.Group {
 	spawnRing({ note, duration, frequency, intensity }) {
 		const durationMilliseconds =
 			new Tone.Time(duration || frequency).toMilliseconds();
-		const ring = new fabric.Circle({
-			stroke: 'black',
-			strokeWidth: 1,
-			radius: 20,
-			fill: null,
-		});
-		this.add(ring);
 
-		animateProps(
-			ring, 
-			{ scaleX: 1.7, scaleY: 1.7, opacity: 0 },
-			{
-				duration: durationMilliseconds,
-				easing: fabric.util.ease.easeOutCubic,
-				onComplete: () => {
-					this.remove(ring);
-				}
-			});
+			const ring = new PulseRing();
+			this.addChild(ring);
+
+			createjs.Tween.get(ring)
+				.to({
+					alpha: 0,
+					scaleX: 1.7,
+					scaleY: 1.7 
+				}, durationMilliseconds, createjs.Ease.getPowOut(3))
+				.call(() => {
+					this.removeChild(ring);
+				});
 	}
 	dispose() {
 		//TODO: remove all children
@@ -97,8 +111,8 @@ class Node extends fabric.Group {
 }
 
 class EventNode extends Node {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 
 		this.nodeType = nodeType.EVENT;
 		this.range = EVENT_RANGE;
@@ -107,8 +121,8 @@ class EventNode extends Node {
 
 // control volume/intensity somehow
 class InstrumentNode extends Node {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 		this.nodeType = nodeType.INSTRUMENT;
 		this.effectNodes = [];
 
@@ -131,24 +145,6 @@ class InstrumentNode extends Node {
 		} else {
 			this.disconnectEffect(node);
 		}
-
-		// if(this.effectNodes.indexOf(effectNode) >= 0) {
-		// 	this.effectNodes.push(effectNode);
-		// } else {
-		// }
-
-		// const effectsGained = difference(effects, this.connectedEffects);
-		// const effectsLost = difference(this.connectedEffects, effects);
-
-		// each(effectsGained, effect => {
-		// 	effect.synth.connect(this.effect);
-		// });
-
-		// each(effectsLost, effect => {
-		// 	effect.synth.disconnect(this.effect);
-		// });
-
-		// this.connectedEffects = effects;
 	}
 	connectEffect(node) {
 		const nodeIndex = indexOf(this.effectNodes, node);
@@ -177,8 +173,8 @@ class InstrumentNode extends Node {
 
 // control wetness somehow
 class EffectNode extends Node {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 
 		this.nodeType = nodeType.EFFECT;
 		this.range = EFFECT_RANGE;
@@ -203,14 +199,14 @@ class EffectNode extends Node {
 // a global "key", and notes are n, n+1, n+2, etc.
 
 class SynthNode extends InstrumentNode {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 
-		this.icon = new fabric.Circle({
+		this.icon = new SolidCircle({
 			fill: 'cyan',
-			radius: 9,
+			radius: 9
 		});
-		this.add(this.icon);
+		this.addChild(this.icon);
 
 		this.synth = new Tone.Synth().toMaster();
 	}
@@ -227,14 +223,14 @@ class SynthNode extends InstrumentNode {
 }
 
 class PluckSynthNode extends InstrumentNode {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 
-		this.icon = new fabric.Circle({
+		this.icon = new SolidCircle({
 			fill: 'orange',
-			radius: 9,
+			radius: 9
 		});
-		this.add(this.icon);
+		this.addChild(this.icon);
 
 		this.synth = new Tone.PluckSynth().toMaster();
 	}
@@ -251,33 +247,17 @@ class PluckSynthNode extends InstrumentNode {
 }
 
 class Metronome extends EventNode {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 		this.frequency = props.frequency;
 
 		this.onLoop = this.onLoop.bind(this);
 
-		this.rangeRing = new RangeRing({
-			radius: this.range,
-		});
-		this.add(this.rangeRing);
-
-		this.icon = new fabric.Triangle({
-			fill: 'white',
-			width: 20, height: 18,
-			top: -2.5,
-		});
-		this.add(this.icon);
+		const rangeRing = new RangeRing();
+		this.addChild(rangeRing);
 
 		this.loop = new Tone.Loop(this.onLoop, this.frequency);
 		this.loop.start();
-
-		// this.on('rotating', event => {
-		// 	// let p = (this.angle - 180)/180;
-		// 	// let s = p/Math.abs(p);
-		// 	// console.log(p - s);
-		// 	this.loop.interval = Math.pow(2, Math.ceil(this.angle/360 * 4)) + 'n';
-		// });
 	}
 	onLoop(time) {
 		const signal = { time, frequency: this.frequency};
@@ -291,13 +271,11 @@ class Metronome extends EventNode {
 }
 
 class BitCrusherNode extends EffectNode {
-	initialize(props) {
-		super.initialize(props);
+	constructor(props) {
+		super(props);
 
-		this.rangeRing = new RangeRing({
-			radius: this.range,
-		});
-		this.add(this.rangeRing);
+		const rangeRing = new RangeRing();
+		this.addChild(rangeRing);
 
 		this.effect = new Tone.BitCrusher(4).toMaster();
 	}
