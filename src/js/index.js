@@ -12,6 +12,7 @@ const metronome1 = new Metronome({ frequency: '8n', x: 100, y: 350 });
 
 const effect1 = new BitCrusherNode({ x: 350, y: 350 });
 const effect2 = new ChorusNode({ x: 410, y: 350 });
+const effect3 = new PitchShiftNode({ x: 500, y: 350 });
 
 // //use an array of objects as long as the object has a "time" attribute
 // var part = new Tone.Part(function(time, value){

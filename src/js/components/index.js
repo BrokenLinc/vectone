@@ -1,4 +1,4 @@
-import { assign, indexOf } from 'lodash';
+import { assign, each, remove, uniq } from 'lodash';
 import createjs from 'createjs-combined';
 import Tone from 'tone';
 
@@ -17,6 +17,16 @@ const RANGE_RING_PROPS = {
 	strokeWidth: 1,
 	opacity: 0.4,
 };
+
+class Grip extends createjs.Shape {
+	constructor(props) {
+		super(props);
+
+		this.graphics
+			.beginFill('black')
+			.drawCircle(0, 0, GRIP_SIZE / 2);
+	}
+}
 
 class RangeRing extends createjs.Shape {
 	constructor(props) {
@@ -59,10 +69,7 @@ class Node extends createjs.Container {
 
 		this.receiverNodes = [];
 
-		const grip = new createjs.Shape();
-		grip.graphics
-			.beginFill('black')
-			.drawCircle(0, 0, GRIP_SIZE / 2);
+		const grip = new Grip();
 		this.addChild(grip);
 
 		grip.on('pressmove', e => {
@@ -124,7 +131,7 @@ class InstrumentNode extends Node {
 	constructor(props) {
 		super(props);
 		this.nodeType = nodeType.INSTRUMENT;
-		this.effectNodes = [];
+		this.effects = [];
 
 		this.onEventSignal = this.onEventSignal.bind(this);
 		this.onEffectMove = this.onEffectMove.bind(this);
@@ -141,28 +148,27 @@ class InstrumentNode extends Node {
 		const shouldBeConnected = distanceBetweenNodesShorterThan(this, node, node.range + GRIP_SIZE / 2);
 
 		if (shouldBeConnected) {
-			this.connectEffect(node);
+			this.connectEffect(node.effect);
 		} else {
-			this.disconnectEffect(node);
+			this.disconnectEffect(node.effect);
 		}
 	}
-	connectEffect(node) {
-		const nodeIndex = indexOf(this.effectNodes, node);
-		const isConnected =  nodeIndex >= 0;
-		if (!isConnected) {
-			this.effectNodes.push(node);
-			this.synth.connect(node.effect);
-		}
+	connectEffect(effect) {
+		this.effects.push(effect);
+		this.effects = uniq(this.effects);
+		this.applyEffects();
 	}
-	disconnectEffect(node) {
-		const nodeIndex = indexOf(this.effectNodes, node);
-		const isConnected =  nodeIndex >= 0;
-		if (isConnected) {
-			this.effectNodes.splice(nodeIndex, 1);
-			this.synth.disconnect(node.effect);
-			if (this.effectNodes.length === 0) {
-				this.synth.toMaster();
-			}
+	disconnectEffect(effect) {
+		remove(this.effects, effect);
+		this.applyEffects();
+	}
+	applyEffects() {
+		this.synth.disconnect();
+		each(this.effects, effect => {
+			this.synth.connect(effect);
+		})
+		if(this.effects.length <= 0) {
+			this.synth.connect(Tone.Master);
 		}
 	}
 	dispose() {

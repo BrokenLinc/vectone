@@ -28,6 +28,16 @@ const distanceBetweenNodesShorterThan = (node1, node2, distance) => {
 	return xdist * xdist + ydist * ydist < distance * distance;
 }
 
+const draggable = (object, _dragObject) => {
+	const dragObject = _dragObject || object;
+
+	dragObject.on('pressmove', e => {
+		moveToFront(object);
+		object.x = e.stageX;
+		object.y = e.stageY;
+	});
+}
+
 const moveToFront = displayObject => {
 	stage.setChildIndex(displayObject, stage.getNumChildren() - 1);
 }
