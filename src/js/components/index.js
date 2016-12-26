@@ -9,14 +9,6 @@ import stage from '../stage';
 
 const GRIP_SIZE = 50;
 const EVENT_RANGE = 100;
-const EFFECT_RANGE = 100;
-const RANGE_RING_PROPS = {
-	fill: 'transparent',
-	stroke: 'black',
-	strokeDashArray: [7, 7], 
-	strokeWidth: 1,
-	opacity: 0.4,
-};
 
 class Grip extends createjs.Shape {
 	constructor(props) {
@@ -25,6 +17,18 @@ class Grip extends createjs.Shape {
 		this.graphics
 			.beginFill('black')
 			.drawCircle(0, 0, GRIP_SIZE / 2);
+	}
+}
+
+class DestinationLine extends createjs.Shape {
+	to(x = 0, y = 0) {
+		this.graphics
+			.clear()
+			.setStrokeStyle(1)
+			.beginStroke('black')
+			.moveTo(0, 0)
+			.lineTo(x, y)
+			.endStroke();
 	}
 }
 
@@ -67,10 +71,13 @@ class Node extends createjs.Container {
 
 		this.set(props);
 
-		this.receiverNodes = [];
+		this.onNodeMove = this.onNodeMove.bind(this);
 
 		const grip = new Grip();
 		this.addChild(grip);
+
+		this.destinationLine = new DestinationLine();
+		this.addChild(this.destinationLine);
 
 		grip.on('pressmove', e => {
 			const node = this;
@@ -79,18 +86,41 @@ class Node extends createjs.Container {
 			node.x = e.stageX;
 			node.y = e.stageY;
 
-			if(node.nodeType === nodeType.INSTRUMENT) {
-				ether.trigger('INSTRUMENT_MOVE', { node });
-			}
-			if(node.nodeType === nodeType.EFFECT) {
-				ether.trigger('EFFECT_MOVE', { node });
-			}
+			ether.trigger('NODE_MOVE', { node });
 		});
+
+		ether.on('NODE_MOVE', this.onNodeMove);
 
 		stage.addChild(this);
 	}
-	setReceivers(nodes) {
-		this.receiverNodes = nodes;
+	onNodeMove(e) {
+		if(e.node === this || e.node === this.connectedTo) {
+			this.updateConnection();
+		}
+	}
+	disconnect() {
+		if(this.channel && this.connectedTo) {
+			this.channel.disconnect();
+			this.connectedTo == null;
+		}	
+	}
+	connect(node) {
+		if(node !== this.connectedTo) {
+			this.disconnect();
+
+			if(this.channel) {
+				this.channel.connect(node.channel);
+				this.connectedTo = node;
+				this.updateConnection();
+			}
+		}
+	}
+	updateConnection() {
+		if(this.connectedTo) {
+			const xdist = this.connectedTo.x - this.x;
+			const ydist = this.connectedTo.y - this.y;
+			this.destinationLine.to(xdist, ydist);
+		}
 	}
 	receiveSignal(props) {
 		this.spawnRing(props);
@@ -117,59 +147,47 @@ class Node extends createjs.Container {
 	}
 }
 
+class MasterNode extends Node {
+	constructor(props) {
+		super(props);
+
+		this.nodeType = nodeType.MASTER;
+		this.channel = Tone.Master;
+	}
+}
+
 class EventNode extends Node {
 	constructor(props) {
 		super(props);
 
 		this.nodeType = nodeType.EVENT;
 		this.range = EVENT_RANGE;
+
+		const rangeRing = new RangeRing();
+		this.addChild(rangeRing);
 	}
 }
 
-// control volume/intensity somehow
+// control volume/intensity somehow?
 class InstrumentNode extends Node {
 	constructor(props) {
 		super(props);
 		this.nodeType = nodeType.INSTRUMENT;
-		this.effects = [];
 
 		this.onEventSignal = this.onEventSignal.bind(this);
-		this.onEffectMove = this.onEffectMove.bind(this);
 
 		ether.on('EVENT_SIGNAL', this.onEventSignal);
-		ether.on('EFFECT_MOVE', this.onEffectMove);
 	}
 	onEventSignal({ node, signal }) {
 		if (distanceBetweenNodesShorterThan(this, node, node.range + GRIP_SIZE / 2)) {
 			this.receiveSignal(signal);
 		}
 	}
-	onEffectMove({ node }) {
-		const shouldBeConnected = distanceBetweenNodesShorterThan(this, node, node.range + GRIP_SIZE / 2);
+	receiveSignal(props) {
+		super.receiveSignal(props);
 
-		if (shouldBeConnected) {
-			this.connectEffect(node.effect);
-		} else {
-			this.disconnectEffect(node.effect);
-		}
-	}
-	connectEffect(effect) {
-		this.effects.push(effect);
-		this.effects = uniq(this.effects);
-		this.applyEffects();
-	}
-	disconnectEffect(effect) {
-		remove(this.effects, effect);
-		this.applyEffects();
-	}
-	applyEffects() {
-		this.synth.disconnect();
-		each(this.effects, effect => {
-			this.synth.connect(effect);
-		})
-		if(this.effects.length <= 0) {
-			this.synth.connect(Tone.Master);
-		}
+		const { time } = props;
+		this.channel.triggerAttackRelease('C3', '8n', time, 1);
 	}
 	dispose() {
 		ether.off('EVENT_SIGNAL', this.onEventSignal);
@@ -177,26 +195,20 @@ class InstrumentNode extends Node {
 	}
 }
 
-// control wetness somehow
 class EffectNode extends Node {
 	constructor(props) {
 		super(props);
 
 		this.nodeType = nodeType.EFFECT;
-		this.range = EFFECT_RANGE;
-
-		this.onInstrumentMove = this.onInstrumentMove.bind(this);
-
-		ether.on('INSTRUMENT_MOVE', this.onInstrumentMove);
 	}
-	onInstrumentMove({ node }) {
-		const shouldBeConnected = distanceBetweenNodesShorterThan(this, node, this.range + GRIP_SIZE / 2);
+	updateConnection() {
+		super.updateConnection();
 
-		if (shouldBeConnected) {
-			node.connectEffect(this);
-		} else {
-			node.disconnectEffect(this);
-		}
+		const xdist = this.connectedTo.x - this.x;
+		const ydist = this.connectedTo.y - this.y;
+
+		const distSq = Math.pow(xdist, 2) + Math.pow(ydist, 2);
+		this.channel.wet.value = Math.min(2000 / distSq, 1);
 	}
 }
 
@@ -214,16 +226,10 @@ class SynthNode extends InstrumentNode {
 		});
 		this.addChild(this.icon);
 
-		this.synth = new Tone.Synth().toMaster();
-	}
-	receiveSignal(props) {
-		super.receiveSignal(props);
-
-		const { time } = props;
-		this.synth.triggerAttackRelease('C3', '8n', time, 1);
+		this.channel = new Tone.Synth();
 	}
 	dispose() {
-		this.synth.dispose();
+		this.channel.dispose();
 		super.dispose();
 	}
 }
@@ -238,16 +244,10 @@ class PluckSynthNode extends InstrumentNode {
 		});
 		this.addChild(this.icon);
 
-		this.synth = new Tone.PluckSynth().toMaster();
-	}
-	receiveSignal(props) {
-		super.receiveSignal(props);
-
-		const { time } = props;
-		this.synth.triggerAttackRelease('C3', '8n', time, 0.1);
+		this.channel = new Tone.PluckSynth();
 	}
 	dispose() {
-		this.synth.dispose();
+		this.channel.dispose();
 		super.dispose();
 	}
 }
@@ -258,9 +258,6 @@ class Metronome extends EventNode {
 		this.frequency = props.frequency;
 
 		this.onLoop = this.onLoop.bind(this);
-
-		const rangeRing = new RangeRing();
-		this.addChild(rangeRing);
 
 		this.icon = new SolidCircle({
 			fill: 'blue',
@@ -286,19 +283,16 @@ class BitCrusherNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
-		const rangeRing = new RangeRing();
-		this.addChild(rangeRing);
-
 		this.icon = new SolidCircle({
 			fill: 'yellow',
 			radius: 9
 		});
 		this.addChild(this.icon);
 
-		this.effect = new Tone.BitCrusher(4).toMaster();
+		this.channel = new Tone.BitCrusher(4);
 	}
 	dispose() {
-		this.effect.dispose();
+		this.channel.dispose();
 		super.dispose();
 	}
 }
@@ -307,19 +301,16 @@ class PitchShiftNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
-		const rangeRing = new RangeRing();
-		this.addChild(rangeRing);
-
 		this.icon = new SolidCircle({
 			fill: 'pink',
 			radius: 9
 		});
 		this.addChild(this.icon);
 
-		this.effect = new Tone.PitchShift(-8).toMaster();
+		this.channel = new Tone.PitchShift(-8);
 	}
 	dispose() {
-		this.effect.dispose();
+		this.channel.dispose();
 		super.dispose();
 	}
 }
@@ -328,25 +319,23 @@ class ChorusNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
-		const rangeRing = new RangeRing();
-		this.addChild(rangeRing);
-
 		this.icon = new SolidCircle({
 			fill: 'purple',
 			radius: 9
 		});
 		this.addChild(this.icon);
 
-		this.effect = new Tone.Chorus().toMaster();
+		this.channel = new Tone.Chorus();
 	}
 	dispose() {
-		this.effect.dispose();
+		this.channel.dispose();
 		super.dispose();
 	}
 }
 
 module.exports = {
 	Node,
+	MasterNode,
 	SynthNode,
 	PluckSynthNode,
 	Metronome,
