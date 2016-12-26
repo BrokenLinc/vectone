@@ -1,8 +1,5 @@
 import Tone from 'tone';
-import nodeType from './nodeType';
-import ether from './ether';
-import stage from './stage';
-import { SynthNode, PluckSynthNode, Metronome, BitCrusherNode } from './components';
+import { SynthNode, PluckSynthNode, Metronome, BitCrusherNode, PitchShiftNode, ChorusNode } from './components';
 
 import '../css/app.less';
 
@@ -13,7 +10,8 @@ const synthNode2 = new PluckSynthNode({ x: 200, y: 100 });
 
 const metronome1 = new Metronome({ frequency: '8n', x: 100, y: 350 });
 
-const effect1 = new BitCrusherNode({ x: 350, y: 350 })
+const effect1 = new BitCrusherNode({ x: 350, y: 350 });
+const effect2 = new ChorusNode({ x: 410, y: 350 });
 
 // //use an array of objects as long as the object has a "time" attribute
 // var part = new Tone.Part(function(time, value){

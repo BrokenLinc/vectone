@@ -256,6 +256,12 @@ class Metronome extends EventNode {
 		const rangeRing = new RangeRing();
 		this.addChild(rangeRing);
 
+		this.icon = new SolidCircle({
+			fill: 'blue',
+			radius: 9
+		});
+		this.addChild(this.icon);
+
 		this.loop = new Tone.Loop(this.onLoop, this.frequency);
 		this.loop.start();
 	}
@@ -277,7 +283,55 @@ class BitCrusherNode extends EffectNode {
 		const rangeRing = new RangeRing();
 		this.addChild(rangeRing);
 
+		this.icon = new SolidCircle({
+			fill: 'yellow',
+			radius: 9
+		});
+		this.addChild(this.icon);
+
 		this.effect = new Tone.BitCrusher(4).toMaster();
+	}
+	dispose() {
+		this.effect.dispose();
+		super.dispose();
+	}
+}
+
+class PitchShiftNode extends EffectNode {
+	constructor(props) {
+		super(props);
+
+		const rangeRing = new RangeRing();
+		this.addChild(rangeRing);
+
+		this.icon = new SolidCircle({
+			fill: 'pink',
+			radius: 9
+		});
+		this.addChild(this.icon);
+
+		this.effect = new Tone.PitchShift(-8).toMaster();
+	}
+	dispose() {
+		this.effect.dispose();
+		super.dispose();
+	}
+}
+
+class ChorusNode extends EffectNode {
+	constructor(props) {
+		super(props);
+
+		const rangeRing = new RangeRing();
+		this.addChild(rangeRing);
+
+		this.icon = new SolidCircle({
+			fill: 'purple',
+			radius: 9
+		});
+		this.addChild(this.icon);
+
+		this.effect = new Tone.Chorus().toMaster();
 	}
 	dispose() {
 		this.effect.dispose();
@@ -291,4 +345,6 @@ module.exports = {
 	PluckSynthNode,
 	Metronome,
 	BitCrusherNode,
+	PitchShiftNode,
+	ChorusNode,
 };

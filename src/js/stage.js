@@ -1,4 +1,3 @@
-import { assign } from 'lodash';
 import createjs from 'createjs-combined'
 
 // config
