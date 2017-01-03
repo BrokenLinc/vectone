@@ -1,9 +1,9 @@
-import { assign, each, remove, uniq } from 'lodash';
+import { assign } from 'lodash';
 import createjs from 'createjs-combined';
 import Tone from 'tone';
 
 import nodeType from '../nodeType';
-import { animateProps, distanceBetweenNodesShorterThan, moveToFront } from '../helpers';
+import { distanceBetweenNodes, moveToFront, randomInteger } from '../helpers';
 import ether from '../ether';
 import stage from '../stage';
 
@@ -126,8 +126,8 @@ class Node extends createjs.Container {
 		this.spawnRing(props);
 	}
 	spawnRing({ note, duration, frequency, intensity }) {
-		const durationMilliseconds =
-			new Tone.Time(duration || frequency).toMilliseconds();
+		const durationMilliseconds = 2000;
+			// new Tone.Time(duration || frequency).toMilliseconds();
 
 			const ring = new PulseRing();
 			this.addChild(ring);
@@ -179,15 +179,17 @@ class InstrumentNode extends Node {
 		ether.on('EVENT_SIGNAL', this.onEventSignal);
 	}
 	onEventSignal({ node, signal }) {
-		if (distanceBetweenNodesShorterThan(this, node, node.range + GRIP_SIZE / 2)) {
-			this.receiveSignal(signal);
+		const dist = distanceBetweenNodes(this, node);
+		const limit = node.range + GRIP_SIZE / 2;
+		if (dist < limit) {
+			this.receiveSignal(assign({ strength: (limit - dist) / limit }, signal));
 		}
 	}
-	receiveSignal(props) {
-		super.receiveSignal(props);
+	receiveSignal(signal) {
+		super.receiveSignal(signal);
 
-		const { time } = props;
-		this.channel.triggerAttackRelease('C3', '8n', time, 1);
+		const { time, note, strength } = signal;
+		this.channel.triggerAttackRelease(note || 'C3', '8n', time, strength || 1);
 	}
 	dispose() {
 		ether.off('EVENT_SIGNAL', this.onEventSignal);
@@ -248,6 +250,59 @@ class PluckSynthNode extends InstrumentNode {
 	}
 	dispose() {
 		this.channel.dispose();
+		super.dispose();
+	}
+}
+
+class PartNode extends EventNode {
+	constructor(props) {
+		super(props);
+
+		this.onLoop = this.onLoop.bind(this);
+
+		this.icon = new SolidCircle({
+			fill: 'blue',
+			radius: 9
+		});
+		this.addChild(this.icon);
+
+		const randomTimeNote = () => {
+			return [
+				[
+					0,
+					randomInteger(0,3),
+					randomInteger(0,3),
+				].join(':'),
+				[
+					['C','D','E','G','A'][randomInteger(0,4)],
+					//String.fromCharCode(randomInteger(65,71)),
+					randomInteger(2,3),
+				].join(''),
+			];
+		};
+
+		const part = [
+			randomTimeNote(),
+			randomTimeNote(),
+			randomTimeNote(),
+			randomTimeNote(),
+			randomTimeNote(),
+			randomTimeNote(),
+		];
+
+		console.log(part);
+
+		this.loop = new Tone.Part(this.onLoop, part);
+		this.loop.loop = true;
+		this.loop.start();
+	}
+	onLoop(time, note) {
+		const signal = { time, note };
+		this.receiveSignal(signal);
+		ether.trigger('EVENT_SIGNAL', { node: this, signal });
+	}
+	dispose() {
+		this.loop.dispose();
 		super.dispose();
 	}
 }
@@ -342,4 +397,5 @@ module.exports = {
 	BitCrusherNode,
 	PitchShiftNode,
 	ChorusNode,
+	PartNode,
 };
