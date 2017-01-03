@@ -32,6 +32,10 @@ var config = {
 	},
 	module : {
 		loaders :[
+		    {
+		    	test: /node_modules\/createjs-combined\/.*\.js$/,
+		    	loader: 'imports?this=>window!exports?window.createjs'
+			},
 			{
 		      test: /\.jsx?$/,
 		      exclude: /node_modules/,

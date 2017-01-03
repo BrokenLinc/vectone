@@ -1,71 +1,63 @@
+import { each, sortBy } from 'lodash';
 import Tone from 'tone';
-// import { fabric } from 'fabric-browseronly';
+import { SynthNode, MasterNode, PartNode, PluckSynthNode, Metronome, BitCrusherNode, PitchShiftNode, ChorusNode } from './components';
 
 import nodeType from './nodeType';
-import { getNodesInRange } from './helpers';
 import ether from './ether';
-import canvas from './canvas';
-import { SynthNode, PluckSynthNode, Metronome, BitCrusherNode } from './components';
+import stage from './stage';
 
 import '../css/app.less';
 
-canvas.on('object:moving', event => {
-	const node = event.target;
-	if(node.nodeType === nodeType.INSTRUMENT) {
-		ether.trigger('INSTRUMENT_MOVE', { node });
-	}
-	if(node.nodeType === nodeType.EFFECT) {
-		ether.trigger('EFFECT_MOVE', { node });
-	}
-});
-
 Tone.Transport.start();
 
+const masterNode = new MasterNode({ x: 100, y: 100 });
+const synthNode = new SynthNode({ x: 150, y: 200 });
+const synthNode2 = new PluckSynthNode({ x: 200, y: 100 });
 
-const synthNode = new SynthNode({ left: 100, top: 100 });
-const synthNode2 = new PluckSynthNode({ left: 200, top: 100 });
+const effect2 = new ChorusNode({ x: 410, y: 350 });
+const effect3 = new PitchShiftNode({ x: 500, y: 350 });
+const effect1 = new BitCrusherNode({ x: 350, y: 350 });
 
-const metronome1 = new Metronome({ frequency: '8n', left: 100, top: 350 });
+const metronome1 = new Metronome({ frequency: '4n', x: 300, y: 300 });
+const metronome2 = new Metronome({ frequency: '2n', x: 600, y: 300 });
 
-const effect1 = new BitCrusherNode({ left: 350, top: 350 })
+const part1 = new PartNode({ x: 600, y: 100 });
+const part2 = new PartNode({ x: 500, y: 100 });
 
-//const metronome2 = new Metronome({ frequency: '8n', left: 350, top: 350 });
+// God method
+const connectNodes = masterNode => {
+	let femaleNodes = [];
+	let maleNodes = [];
+	let connectedFemaleNodes = [masterNode];
 
+	each(stage.children, node => {
+		if(node.nodeType === nodeType.MASTER || node.nodeType === nodeType.EFFECT) {
+			femaleNodes.push(node);
+		} 
+		if(node.nodeType === nodeType.INSTRUMENT || node.nodeType === nodeType.EFFECT) {
+			maleNodes.push(node);
+		}
+	});
 
+	maleNodes = sortBy(maleNodes, maleNode => {
+		return Math.pow(masterNode.x - maleNode.x, 2) + Math.pow(masterNode.y - maleNode.y, 2);
+	});
 
-// ### scratch pad ###
+	each(maleNodes, maleNode => {
+		const closestConnectedFemaleNode = sortBy(connectedFemaleNodes, femaleNode => {
+			return Math.pow(femaleNode.x - maleNode.x, 2) + Math.pow(femaleNode.y - maleNode.y, 2);
+		})[0];
 
-//metronome --> synth
+		maleNode.connect(closestConnectedFemaleNode);
 
-// (loops, parts) --> synth
+		// hermaphrodite!
+		if (maleNode.nodeType === nodeType.EFFECT) {
+			connectedFemaleNodes.push(maleNode);
+		}
+	})
+}
+connectNodes(masterNode);
 
-// metronome1.addReceiver(synthNode);
-// metronome1.removeReceiver(synthNode);
-
-
-
-
-
-// var synth = new Tone.Synth().toMaster();
-
-
-// var crusher = new Tone.BitCrusher(4).toMaster();
-// //var synth = new Tone.MonoSynth();
-// synth.connect(crusher);
-// //synth.discconnect(crusher);
-
-// //use an array of objects as long as the object has a "time" attribute
-// var part = new Tone.Part(function(time, value){
-// 	//the value is an object which contains both the note and the velocity
-// 	synth.triggerAttackRelease(value.note, "8n", time, value.velocity);
-// }, [{"time" : 0, "note" : "C3", "velocity": 0.9}, 
-// 	   {"time" : "0:2", "note" : "C4", "velocity": 0.5},
-// 	   {"time" : "0:3", "note" : "C3", "velocity": 0.9}, 
-// ]).start(0);
-// part.loop = true;
-
-// //toggle
-// window.addEventListener('click', () => {
-// 	//part.mute = !part.mute;
-// 	crusher.wet.value = 1 - crusher.wet.value;
-// });
+ether.on('NODE_MOVE', () => {
+	connectNodes(masterNode);
+});
