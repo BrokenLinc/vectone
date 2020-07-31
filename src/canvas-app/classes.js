@@ -1,16 +1,18 @@
-import { assign } from 'lodash';
-import createjs from 'createjs-combined';
+import { assign, random } from 'lodash';
 import Tone from 'tone';
 
-import nodeType from '../nodeType';
-import { distanceBetweenNodes, moveToFront, randomInteger } from '../helpers';
-import ether from '../ether';
-import stage from '../stage';
+import EVENT from './event';
+import NODE_TYPE from './nodeType';
+import { distanceBetweenNodes, moveToFront } from './helpers';
+import ether from './ether';
+import stage from './stage';
+
+const { createjs } = window;
 
 const GRIP_SIZE = 50;
 const EVENT_RANGE = 100;
 
-class Grip extends createjs.Shape {
+export class Grip extends createjs.Shape {
 	constructor(props) {
 		super(props);
 
@@ -20,7 +22,7 @@ class Grip extends createjs.Shape {
 	}
 }
 
-class DestinationLine extends createjs.Shape {
+export class DestinationLine extends createjs.Shape {
 	to(x = 0, y = 0) {
 		this.graphics
 			.clear()
@@ -32,7 +34,7 @@ class DestinationLine extends createjs.Shape {
 	}
 }
 
-class RangeRing extends createjs.Shape {
+export class RangeRing extends createjs.Shape {
 	constructor(props) {
 		super(props);
 
@@ -44,7 +46,7 @@ class RangeRing extends createjs.Shape {
 	}
 }
 
-class PulseRing extends createjs.Shape {
+export class PulseRing extends createjs.Shape {
 	constructor(props) {
 		super(props);
 
@@ -55,7 +57,7 @@ class PulseRing extends createjs.Shape {
 	}
 }
 
-class SolidCircle extends createjs.Shape {
+export class SolidCircle extends createjs.Shape {
 	constructor({ fill, radius }) {
 		super();
 
@@ -65,7 +67,7 @@ class SolidCircle extends createjs.Shape {
 	}
 }
 
-class Node extends createjs.Container {
+export class Node extends createjs.Container {
 	constructor(props) {
 		super(props);
 
@@ -86,10 +88,10 @@ class Node extends createjs.Container {
 			node.x = e.stageX;
 			node.y = e.stageY;
 
-			ether.trigger('NODE_MOVE', { node });
+			ether.emit(EVENT.NODE_MOVE, { node });
 		});
 
-		ether.on('NODE_MOVE', this.onNodeMove);
+		ether.on(EVENT.NODE_MOVE, this.onNodeMove);
 
 		stage.addChild(this);
 	}
@@ -101,8 +103,8 @@ class Node extends createjs.Container {
 	disconnect() {
 		if(this.channel && this.connectedTo) {
 			this.channel.disconnect();
-			this.connectedTo == null;
-		}	
+			this.connectedTo = null;
+		}
 	}
 	connect(node) {
 		if(node !== this.connectedTo) {
@@ -136,7 +138,7 @@ class Node extends createjs.Container {
 				.to({
 					alpha: 0,
 					scaleX: 1.7,
-					scaleY: 1.7 
+					scaleY: 1.7
 				}, durationMilliseconds, createjs.Ease.getPowOut(3))
 				.call(() => {
 					this.removeChild(ring);
@@ -147,20 +149,20 @@ class Node extends createjs.Container {
 	}
 }
 
-class MasterNode extends Node {
+export class MasterNode extends Node {
 	constructor(props) {
 		super(props);
 
-		this.nodeType = nodeType.MASTER;
+		this.nodeType = NODE_TYPE.MASTER;
 		this.channel = Tone.Master;
 	}
 }
 
-class EventNode extends Node {
+export class EventNode extends Node {
 	constructor(props) {
 		super(props);
 
-		this.nodeType = nodeType.EVENT;
+		this.nodeType = NODE_TYPE.EVENT;
 		this.range = EVENT_RANGE;
 
 		const rangeRing = new RangeRing();
@@ -169,14 +171,14 @@ class EventNode extends Node {
 }
 
 // control volume/intensity somehow?
-class InstrumentNode extends Node {
+export class InstrumentNode extends Node {
 	constructor(props) {
 		super(props);
-		this.nodeType = nodeType.INSTRUMENT;
+		this.nodeType = NODE_TYPE.INSTRUMENT;
 
 		this.onEventSignal = this.onEventSignal.bind(this);
 
-		ether.on('EVENT_SIGNAL', this.onEventSignal);
+		ether.on(EVENT.NODE_SIGNAL, this.onEventSignal);
 	}
 	onEventSignal({ node, signal }) {
 		const dist = distanceBetweenNodes(this, node);
@@ -192,16 +194,16 @@ class InstrumentNode extends Node {
 		this.channel.triggerAttackRelease(note || 'C3', '8n', time, strength || 1);
 	}
 	dispose() {
-		ether.off('EVENT_SIGNAL', this.onEventSignal);
+		ether.off(EVENT.NODE_SIGNAL, this.onEventSignal);
 		super.dispose();
 	}
 }
 
-class EffectNode extends Node {
+export class EffectNode extends Node {
 	constructor(props) {
 		super(props);
 
-		this.nodeType = nodeType.EFFECT;
+		this.nodeType = NODE_TYPE.EFFECT;
 	}
 	updateConnection() {
 		super.updateConnection();
@@ -210,6 +212,7 @@ class EffectNode extends Node {
 		const ydist = this.connectedTo.y - this.y;
 
 		const distSq = Math.pow(xdist, 2) + Math.pow(ydist, 2);
+		// TODO: add dial for wet value
 		this.channel.wet.value = Math.min(2000 / distSq, 1);
 	}
 }
@@ -218,7 +221,7 @@ class EffectNode extends Node {
 // Tone.Transport control to affect overall BPM
 // a global "key", and notes are n, n+1, n+2, etc.
 
-class SynthNode extends InstrumentNode {
+export class SynthNode extends InstrumentNode {
 	constructor(props) {
 		super(props);
 
@@ -236,7 +239,7 @@ class SynthNode extends InstrumentNode {
 	}
 }
 
-class PluckSynthNode extends InstrumentNode {
+export class PluckSynthNode extends InstrumentNode {
 	constructor(props) {
 		super(props);
 
@@ -254,29 +257,31 @@ class PluckSynthNode extends InstrumentNode {
 	}
 }
 
-class PartNode extends EventNode {
+export class PartNode extends EventNode {
 	constructor(props) {
 		super(props);
 
 		this.onLoop = this.onLoop.bind(this);
 
 		this.icon = new SolidCircle({
-			fill: 'blue',
+			fill: 'green',
 			radius: 9
 		});
 		this.addChild(this.icon);
 
 		const randomTimeNote = () => {
 			return [
+				// whole, quarter, sixteenth note (scale depends on node frequency)
 				[
 					0,
-					randomInteger(0,3),
-					randomInteger(0,3),
+					random(0,3),
+					random(0,3),
 				].join(':'),
+				// pentatonic scale over 2 octaves
 				[
-					['C','D','E','G','A'][randomInteger(0,4)],
-					//String.fromCharCode(randomInteger(65,71)),
-					randomInteger(2,3),
+					['C','D','E','G','A'][random(0,4)],
+					//String.fromCharCode(random(65,71)),
+					random(2,3),
 				].join(''),
 			];
 		};
@@ -290,7 +295,7 @@ class PartNode extends EventNode {
 			randomTimeNote(),
 		];
 
-		console.log(part);
+		// console.log(part);
 
 		this.loop = new Tone.Part(this.onLoop, part);
 		this.loop.loop = true;
@@ -299,7 +304,7 @@ class PartNode extends EventNode {
 	onLoop(time, note) {
 		const signal = { time, note };
 		this.receiveSignal(signal);
-		ether.trigger('EVENT_SIGNAL', { node: this, signal });
+		ether.emit(EVENT.NODE_SIGNAL, { node: this, signal });
 	}
 	dispose() {
 		this.loop.dispose();
@@ -307,7 +312,7 @@ class PartNode extends EventNode {
 	}
 }
 
-class Metronome extends EventNode {
+export class Metronome extends EventNode {
 	constructor(props) {
 		super(props);
 		this.frequency = props.frequency;
@@ -326,7 +331,7 @@ class Metronome extends EventNode {
 	onLoop(time) {
 		const signal = { time, frequency: this.frequency};
 		this.receiveSignal(signal);
-		ether.trigger('EVENT_SIGNAL', { node: this, signal });
+		ether.emit(EVENT.NODE_SIGNAL, { node: this, signal });
 	}
 	dispose() {
 		this.loop.dispose();
@@ -334,7 +339,7 @@ class Metronome extends EventNode {
 	}
 }
 
-class BitCrusherNode extends EffectNode {
+export class BitCrusherNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
@@ -352,7 +357,7 @@ class BitCrusherNode extends EffectNode {
 	}
 }
 
-class PitchShiftNode extends EffectNode {
+export class PitchShiftNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
@@ -370,7 +375,7 @@ class PitchShiftNode extends EffectNode {
 	}
 }
 
-class ChorusNode extends EffectNode {
+export class ChorusNode extends EffectNode {
 	constructor(props) {
 		super(props);
 
@@ -387,15 +392,3 @@ class ChorusNode extends EffectNode {
 		super.dispose();
 	}
 }
-
-module.exports = {
-	Node,
-	MasterNode,
-	SynthNode,
-	PluckSynthNode,
-	Metronome,
-	BitCrusherNode,
-	PitchShiftNode,
-	ChorusNode,
-	PartNode,
-};
