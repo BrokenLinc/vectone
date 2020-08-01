@@ -2,7 +2,7 @@ import { each, sortBy } from 'lodash';
 import Tone from 'tone';
 import { SynthNode, MasterNode, PartNode, PluckSynthNode, Metronome, BitCrusherNode, PitchShiftNode, ChorusNode } from './components';
 
-import nodeType from './nodeType';
+import nodeType from '../src/constants/nodeType';
 import ether from './ether';
 import stage from './stage';
 
@@ -33,7 +33,7 @@ const connectNodes = masterNode => {
 	each(stage.children, node => {
 		if(node.nodeType === nodeType.MASTER || node.nodeType === nodeType.EFFECT) {
 			femaleNodes.push(node);
-		} 
+		}
 		if(node.nodeType === nodeType.INSTRUMENT || node.nodeType === nodeType.EFFECT) {
 			maleNodes.push(node);
 		}

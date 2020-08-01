@@ -2,7 +2,7 @@ import { assign } from 'lodash';
 import createjs from 'createjs-combined';
 import Tone from 'tone';
 
-import nodeType from '../nodeType';
+import nodeType from '../../src/constants/nodeType';
 import { distanceBetweenNodes, moveToFront, randomInteger } from '../helpers';
 import ether from '../ether';
 import stage from '../stage';
@@ -102,7 +102,7 @@ class Node extends createjs.Container {
 		if(this.channel && this.connectedTo) {
 			this.channel.disconnect();
 			this.connectedTo == null;
-		}	
+		}
 	}
 	connect(node) {
 		if(node !== this.connectedTo) {
@@ -136,7 +136,7 @@ class Node extends createjs.Container {
 				.to({
 					alpha: 0,
 					scaleX: 1.7,
-					scaleY: 1.7 
+					scaleY: 1.7
 				}, durationMilliseconds, createjs.Ease.getPowOut(3))
 				.call(() => {
 					this.removeChild(ring);
