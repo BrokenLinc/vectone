@@ -6,6 +6,7 @@
     "@testing-library/jest-dom": "^4.2.4",
     "@testing-library/react": "^9.3.2",
     "@testing-library/user-event": "^7.1.2",
+    "@types/createjs": "^0.0.29",
     "craco": "^0.0.3",
     "craco-alias": "^2.1.1",
     "craco-less": "^1.17.0",
